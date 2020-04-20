@@ -49,13 +49,13 @@
         "filename" : "io_usage",
         "granularity" : "process",
         "components" : [
-            "io:cancelled_write_bytes",
-            "io:rchar",
-            "io:read_bytes",
-            "io:syscr",
-            "io:syscw",
-            "io:wchar",
-            "io:write_bytes"
+            "io:cancelled_write_bytes / Mean",
+            "io:rchar / Mean",
+            "io:read_bytes / Mean",
+            "io:syscr / Mean",
+            "io:syscw / Mean",
+            "io:wchar / Mean",
+            "io:write_bytes / Mean"
         ],
         "labels" : [
             "cancelled_write_bytes",
@@ -66,6 +66,13 @@
             "wchar",
             "write_bytes"
         ]
+        },
+        {
+        "name" : "Top 5 Timers",
+        "filename" : "top_5_timers",
+        "granularity" : "5",
+        "components" : [],
+        "labels" : []
         }
     ]
 }
