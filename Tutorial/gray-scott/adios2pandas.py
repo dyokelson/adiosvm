@@ -8,6 +8,8 @@ import adios2
 #from multiprocessing import Pool
 #import time
 import argparse
+import matplotlib
+matplotlib.use('svg')
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import operator
@@ -77,8 +79,11 @@ def build_per_rank_dataframe(fr_step, step, variables, columns, filename):
     rows = []
     # For each variable, get each MPI rank's data
     for name in variables:
+    #    print(name)
+    #    print(fr_step.read(name))
         rows.append(fr_step.read(name))
     print("Processing dataframe...")
+    # print(rows)
     # Now, transpose the matrix so that the rows are each rank, and the variables are columns
     df = pd.DataFrame(rows).transpose()
     # Add a name for each column
@@ -87,7 +92,8 @@ def build_per_rank_dataframe(fr_step, step, variables, columns, filename):
     df['mpi_rank'] = range(0, len(df))
     # Add the step column, all with the same value
     df['step']=step
-    #print(df)
+    #if (filename == "io_usage"):
+    #    print(df)
     print("Plotting...")
     df[columns].plot(logy=True)
     imgfile = filename+"_"+"{0:0>5}".format(step)+".svg"
@@ -96,6 +102,45 @@ def build_per_rank_dataframe(fr_step, step, variables, columns, filename):
     plt.close()
     print("done.")
 
+# Build a dataframe for the top X timers
+
+def build_topX_timers_dataframe(fr_step, step, num_timers, filename):
+    variables = fr_step.available_variables()
+    num_threads = fr_step.read('num_threads')[0]
+    timer_data = {}
+    # Get all timers
+    for name in variables:
+        if ".TAU application" in name:
+            continue
+        if "addr=" in name:
+            continue
+        if "Exclusive TIME" in name:
+            shape_str = variables[name]['Shape'].split(',')
+            shape = list(map(int,shape_str))
+            shortname = name.replace(" / Exclusive TIME", "")
+            timer_data[shortname] = []
+            temp_vals = fr_step.read(name)
+            timer_data[shortname].append(temp_vals[0])
+            index = num_threads
+            while index < shape[0]:
+                timer_data[shortname].append(temp_vals[index])
+                index += num_threads
+    df = pd.DataFrame(timer_data)
+    # Get the mean of each column 
+    mean_series = df.mean()
+    # Get top X timers
+    sorted_series = mean_series.sort_values(ascending=False)
+    topX_series = sorted_series[:num_timers].axes[0].tolist()
+    # Plot the DataFrame
+    print("Plotting...")
+    df[topX_series].plot(kind='bar', stacked=True)
+    imgfile = filename+"_"+"{0:0>5}".format(step)+".svg"
+    print("Writing...")
+    plt.savefig(imgfile)
+    plt.close()
+    print("done.")
+
+    
 # Process the ADIOS2 file
 
 def process_file(args):
@@ -120,7 +165,9 @@ def process_file(args):
         print(filename, "Step = ", cur_step)
         for f in config["figures"]:
             print(f["name"])
-            if f["granularity"] == "node":
+            if "Timer" in f["name"]:
+                build_topX_timers_dataframe(fr_step, cur_step, int(f["granularity"]), f["filename"])
+            elif f["granularity"] == "node":
                 build_per_host_dataframe(fr_step, cur_step, num_hosts, f["components"], f["labels"], f["filename"])
             else:
                 build_per_rank_dataframe(fr_step, cur_step, f["components"], f["labels"], f["filename"])
