@@ -128,6 +128,7 @@ def build_topX_timers_dataframe(fr_step, step, config):
             while index < shape[0]:
                 timer_data[shortname].append(temp_vals[index])
                 index += num_threads
+    print("Processing dataframe...")
     df = pd.DataFrame(timer_data)
     # Get the mean of each column
     mean_series = df.mean()
@@ -136,7 +137,7 @@ def build_topX_timers_dataframe(fr_step, step, config):
     topX = int(config["granularity"])
     topX_cols = sorted_series[:topX].axes[0].tolist()
     # Add all other timers together
-    other_series = sorted_series[topX:].axes[0].tolist()
+    other_series = sorted_series[topX+1:].axes[0].tolist()
     df["other"] = 0
     for other_col in other_series:
         df["other"] += df[other_col]
