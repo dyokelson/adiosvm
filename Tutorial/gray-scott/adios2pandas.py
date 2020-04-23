@@ -12,6 +12,7 @@ import matplotlib
 matplotlib.use('svg')
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+plt.style.use('fast')
 import operator
 from operator import add
 from matplotlib.font_manager import FontProperties
@@ -38,7 +39,7 @@ def get_num_hosts(attr_info):
 
 # Build a dataframe that has per-node data for this timestep of the output data
 
-def build_per_host_dataframe(fr_step, step, num_hosts, variables, columns, filename, ncol):
+def build_per_host_dataframe(fr_step, step, num_hosts, config):
     # Read the number of ranks - check for the new method first
     num_ranks = 1
     if len(fr_step.read('num_ranks')) == 0:
@@ -50,13 +51,13 @@ def build_per_host_dataframe(fr_step, step, num_hosts, variables, columns, filen
     ranks_per_node = num_ranks / num_hosts
     rows = []
     # For each variable, get each MPI rank's data, some will be bogus (they didn't write it)
-    for name in variables:
+    for name in config["components"]:
         rows.append(fr_step.read(name))
     print("Processing dataframe...")
     # Now, transpose the matrix so that the rows are each rank, and the variables are columns
     df = pd.DataFrame(rows).transpose()
     # Add a name for each column
-    df.columns = columns
+    df.columns = config["labels"]
     # Add the MPI rank column (each row is unique)
     df['mpi_rank'] = range(0, len(df))
     # Add the step column, all with the same value
@@ -64,11 +65,12 @@ def build_per_host_dataframe(fr_step, step, num_hosts, variables, columns, filen
     # Filter out the rows that don't have valid data (keep only the lowest rank on each host)
     # This will filter out the bogus data
     df_trimmed = df[df['mpi_rank']%ranks_per_node == 0]
-    #print(df_trimmed)
     print("Plotting...")
-    ax = df_trimmed[columns].plot(kind='bar', stacked=True)
-    plt.legend(loc='upper center', bbox_to_anchor=(0.5,-0.05), ncol=3)
-    imgfile = filename+"_"+"{0:0>5}".format(step)+".svg"
+    ax = df_trimmed[config["labels"]].plot(kind='bar', stacked=True)
+    ax.set_xlabel(config["x axis"])
+    ax.set_ylabel(config["y axis"])
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5,-0.12), ncol=config["legend columns"])
+    imgfile = config["filename"]+"_"+"{0:0>5}".format(step)+".svg"
     print("Writing...")
     plt.savefig(imgfile, bbox_inches='tight')
     plt.close()
@@ -76,29 +78,26 @@ def build_per_host_dataframe(fr_step, step, num_hosts, variables, columns, filen
 
 # Build a dataframe that has per-rank data for this timestep of the output data
 
-def build_per_rank_dataframe(fr_step, step, variables, columns, filename, ncol):
+def build_per_rank_dataframe(fr_step, step, config):
     rows = []
     # For each variable, get each MPI rank's data
-    for name in variables:
-    #    print(name)
-    #    print(fr_step.read(name))
+    for name in config["components"]:
         rows.append(fr_step.read(name))
     print("Processing dataframe...")
-    # print(rows)
     # Now, transpose the matrix so that the rows are each rank, and the variables are columns
     df = pd.DataFrame(rows).transpose()
     # Add a name for each column
-    df.columns = columns
+    df.columns = config["labels"]
     # Add the MPI rank column (each row is unique)
     df['mpi_rank'] = range(0, len(df))
     # Add the step column, all with the same value
     df['step']=step
-    #if (filename == "io_usage"):
-    #    print(df)
     print("Plotting...")
-    df[columns].plot(logy=True, style='.-')
-    plt.legend(loc='upper center', bbox_to_anchor=(0.5,-0.05), ncol=ncol)
-    imgfile = filename+"_"+"{0:0>5}".format(step)+".svg"
+    ax = df[config["labels"]].plot(logy=True, style='.-')
+    ax.set_xlabel(config["x axis"])
+    ax.set_ylabel(config["y axis"])
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5,-0.1), ncol=config["legend columns"])
+    imgfile = config["filename"]+"_"+"{0:0>5}".format(step)+".svg"
     print("Writing...")
     plt.savefig(imgfile, bbox_inches='tight')
     plt.close()
@@ -106,7 +105,7 @@ def build_per_rank_dataframe(fr_step, step, variables, columns, filename, ncol):
 
 # Build a dataframe for the top X timers
 
-def build_topX_timers_dataframe(fr_step, step, num_timers, filename):
+def build_topX_timers_dataframe(fr_step, step, config):
     variables = fr_step.available_variables()
     num_threads = fr_step.read('num_threads')[0]
     timer_data = {}
@@ -132,13 +131,23 @@ def build_topX_timers_dataframe(fr_step, step, num_timers, filename):
     mean_series = df.mean()
     # Get top X timers
     sorted_series = mean_series.sort_values(ascending=False)
-    topX_series = sorted_series[:num_timers].axes[0].tolist()
+    topX = int(config["granularity"])
+    topX_cols = sorted_series[:topX].axes[0].tolist()
+    # Add all other timers together
+    other_series = sorted_series[topX:].axes[0].tolist()
+    df["other"] = 0
+    for other_col in other_series:
+        df["other"] += df[other_col]
+    topX_cols.insert(0,"other")
     # Plot the DataFrame
     print("Plotting...")
-    ax = df[topX_series].plot(kind='bar', stacked=True, width=1.0)
+    ax = df[topX_cols].plot(kind='bar', stacked=True, width=1.0)
+    ax.set_xlabel(config["x axis"])
+    ax.set_ylabel(config["y axis"])
     handles, labels = ax.get_legend_handles_labels()
-    plt.legend(reversed(handles), reversed(labels), loc='upper center', bbox_to_anchor=(0.5,-0.05))
-    imgfile = filename+"_"+"{0:0>5}".format(step)+".svg"
+    short_labels = [label[0:config["max label length"]] for label in labels]
+    plt.legend(reversed(handles), reversed(short_labels), loc='upper center', bbox_to_anchor=(0.5,-0.12))
+    imgfile = config["filename"]+"_"+"{0:0>5}".format(step)+".svg"
     print("Writing...")
     plt.savefig(imgfile, bbox_inches='tight')
     plt.close()
@@ -170,11 +179,11 @@ def process_file(args):
         for f in config["figures"]:
             print(f["name"])
             if "Timer" in f["name"]:
-                build_topX_timers_dataframe(fr_step, cur_step, int(f["granularity"]), f["filename"])
+                build_topX_timers_dataframe(fr_step, cur_step, f)
             elif f["granularity"] == "node":
-                build_per_host_dataframe(fr_step, cur_step, num_hosts, f["components"], f["labels"], f["filename"], f["legend columns"])
+                build_per_host_dataframe(fr_step, cur_step, num_hosts, f)
             else:
-                build_per_rank_dataframe(fr_step, cur_step, f["components"], f["labels"], f["filename"], f["legend columns"])
+                build_per_rank_dataframe(fr_step, cur_step, f)
 
 
 if __name__ == '__main__':
