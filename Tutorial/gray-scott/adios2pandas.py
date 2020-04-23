@@ -69,7 +69,7 @@ def build_per_host_dataframe(fr_step, step, num_hosts, config):
     ax = df_trimmed[config["labels"]].plot(kind='bar', stacked=True)
     ax.set_xlabel(config["x axis"])
     ax.set_ylabel(config["y axis"])
-    plt.legend(loc='upper center', bbox_to_anchor=(0.5,-0.11), ncol=config["legend columns"])
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5,-0.12), ncol=config["legend columns"])
     imgfile = config["filename"]+"_"+"{0:0>5}".format(step)+".svg"
     print("Writing...")
     plt.savefig(imgfile, bbox_inches='tight')
@@ -96,7 +96,7 @@ def build_per_rank_dataframe(fr_step, step, config):
     ax = df[config["labels"]].plot(logy=True, style='.-')
     ax.set_xlabel(config["x axis"])
     ax.set_ylabel(config["y axis"])
-    plt.legend(loc='upper center', bbox_to_anchor=(0.5,-0.1), ncol=config['legend columns'])
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5,-0.11), ncol=config['legend columns'])
     imgfile = config["filename"]+"_"+"{0:0>5}".format(step)+".svg"
     print("Writing...")
     plt.savefig(imgfile, bbox_inches='tight')
@@ -147,7 +147,7 @@ def build_topX_timers_dataframe(fr_step, step, config):
     ax.set_ylabel(config["y axis"])
     handles, labels = ax.get_legend_handles_labels()
     short_labels = [label[0:config["max label length"]] for label in labels]
-    plt.legend(reversed(handles), reversed(short_labels), loc='upper center', bbox_to_anchor=(0.5,-0.11))
+    plt.legend(reversed(handles), reversed(short_labels), loc='upper center', bbox_to_anchor=(0.5,-0.12), ncol=config['legend columns'])
     imgfile = config["filename"]+"_"+"{0:0>5}".format(step)+".svg"
     print("Writing...")
     plt.savefig(imgfile, bbox_inches='tight')
