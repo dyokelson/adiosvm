@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
+import matplotlib
+matplotlib.use('svg')
 import pandas as pd
 from mpi4py import MPI
 import numpy as np
 import adios2
 #import os
 #import glob
-#from multiprocessing import Pool
-#import time
+from multiprocessing import Pool
+import time
 import argparse
-import matplotlib
-matplotlib.use('svg')
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 plt.style.use('fast')
@@ -17,6 +17,11 @@ import operator
 from operator import add
 from matplotlib.font_manager import FontProperties
 import json
+import io
+
+host_bbox = 'tight'
+rank_bbox = 'tight'
+top_x_bbox = 'tight'
 
 def SetupArgs():
     parser = argparse.ArgumentParser()
@@ -36,6 +41,15 @@ def get_num_hosts(attr_info):
         if "Hostname" in key:
             names[(attr_info[key]['Value'])] = 1
     return len(names)
+
+# Get the tight bbox once per figure because it is slow
+
+def get_renderer_bbox(ax):
+    fig = ax.get_figure()
+    fig.canvas.print_svg(io.BytesIO())
+    bbox = fig.get_tightbbox(fig._cachedRenderer).padded(0.2)
+    #bbox = fig.get_tightbbox(fig.canvas.get_renderer()).padded(0.15)
+    return bbox
 
 # Build a dataframe that has per-node data for this timestep of the output data
 
@@ -72,7 +86,10 @@ def build_per_host_dataframe(fr_step, step, num_hosts, config):
     plt.legend(loc='upper center', bbox_to_anchor=(0.5,-0.12), ncol=config["legend columns"])
     imgfile = config["filename"]+"_"+"{0:0>5}".format(step)+".svg"
     print("Writing...")
-    plt.savefig(imgfile, bbox_inches='tight')
+    global host_bbox
+    if step == 0:
+        host_bbox = get_renderer_bbox(ax)
+    plt.savefig(imgfile, bbox_inches=host_bbox)
     plt.close()
     print("done.")
 
@@ -99,7 +116,10 @@ def build_per_rank_dataframe(fr_step, step, config):
     plt.legend(loc='upper center', bbox_to_anchor=(0.5,-0.11), ncol=config['legend columns'])
     imgfile = config["filename"]+"_"+"{0:0>5}".format(step)+".svg"
     print("Writing...")
-    plt.savefig(imgfile, bbox_inches='tight')
+    global rank_bbox
+    if step == 0:
+        rank_bbox = get_renderer_bbox(ax)
+    plt.savefig(imgfile, bbox_inches=rank_bbox)
     plt.close()
     print("done.")
 
@@ -150,7 +170,10 @@ def build_topX_timers_dataframe(fr_step, step, config):
     plt.legend(reversed(handles), reversed(short_labels), loc='upper center', bbox_to_anchor=(0.5,-0.12), ncol=config['legend columns'])
     imgfile = config["filename"]+"_"+"{0:0>5}".format(step)+".svg"
     print("Writing...")
-    plt.savefig(imgfile, bbox_inches='tight')
+    global top_x_bbox
+    if step == 0:
+        top_x_bbox = get_renderer_bbox(ax)
+    plt.savefig(imgfile, bbox_inches=top_x_bbox)
     plt.close()
     print("done.")
 
@@ -158,8 +181,8 @@ def build_topX_timers_dataframe(fr_step, step, config):
 # Process the ADIOS2 file
 
 def process_file(args):
-    config_data = open(args.config)
-    config = json.load(config_data)
+    with open(args.config) as config_data:
+        config = json.load(config_data)
     print(config)
     filename = args.instream
     print ("Opening:", filename)
@@ -190,4 +213,7 @@ def process_file(args):
 if __name__ == '__main__':
     args = SetupArgs()
     print(args)
+    begin_time = time.time()
     process_file(args)
+    total_time = time.time() - begin_time
+    print(f"Processed file in {total_time} seconds")
