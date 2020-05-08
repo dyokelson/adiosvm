@@ -125,21 +125,26 @@ def build_per_rank_dataframe(fr_step, step, config):
 # Build a dataframe for the top X timers
 
 def build_topX_timers_dataframe(fr_step, step, config):
-    variables = fr_step.get_variable_names()
+    variables = fr_step.available_variables()
     num_threads = fr_step.read('num_threads')[0]
     timer_data = {}
     # Get all timers
-    for name, _ in variables:
+    for name in variables:
         if ".TAU application" in name:
             continue
         if "addr=" in name:
             continue
         if "Exclusive TIME" in name:
+            shape_str = variables[name]['Shape'].split(',')
+            shape = list(map(int,shape_str))
             shortname = name.replace(" / Exclusive TIME", "")
             timer_data[shortname] = []
             temp_vals = fr_step.read(name)
-            for i in temp_vals:
-                timer_data[shortname].append(i)
+            timer_data[shortname].append(temp_vals[0])
+            index = num_threads
+            while index < shape[0]:
+                timer_data[shortname].append(temp_vals[index])
+                index += num_threads
     print("Processing dataframe...")
     df = pd.DataFrame(timer_data)
     # Get the mean of each column
@@ -207,7 +212,7 @@ def process_file(args):
 if __name__ == '__main__':
     args = SetupArgs()
     print(args)
-    begin_time = time.time()
+    #begin_time = time.time()
     process_file(args)
-    total_time = time.time() - begin_time
-    print(f"Processed file in {total_time} seconds")
+    #total_time = time.time() - begin_time
+    #print(f"Processed file in {total_time} seconds")
